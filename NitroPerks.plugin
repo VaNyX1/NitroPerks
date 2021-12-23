@@ -1,0 +1,290 @@
+/**
+ * @имя НитроПеркс
+ * @веб-сайт https://github.com/Shimoro-Rune/NitroPerks
+ * @источник https://raw.githubusercontent.com/Shimoro-Rune/NitroPerks/main/NitroPerks.plugin.js
+ * @updateURL https://raw.githubusercontent.com/Shimoro-Rune/NitroPerks/main/NitroPerks.plugin.js
+ */
+/*@cc_on
+@if (@_jscript)
+	
+ // Предложите самостоятельно установить для невежественных пользователей, которые пытаются запустить это напрямую.
+ оболочка var = WScript.CreateObject("WScript.Оболочка");
+ var fs = новый ActiveXObject("Создание сценариев.Файловая системаобъект");
+ var pathPlugins = оболочка.Расширенные строки среды("%APPDATA%\BetterDiscord\плагины");
+ var путь к себе = WScript.Полное имя скрипта;
+ // Расслабьте пользователя, обращаясь к нему от первого лица
+ ракушка.Всплывающее окно("Похоже, вы по ошибке попытались запустить меня напрямую. \n(Не делай этого!)", 0, "Я плагин для BetterDiscord", 0x30);
+ если (fs.GetParentFolderName(путь к себе) === fs.GetAbsolutePathName(пути)) {
+ ракушка.Всплывающее окно("Я уже в нужной папке.", 0, "Я уже установлен", 0x40);
+ } иначе, если (!fs.FolderExists(pathPlugins)) {
+ ракушка.Всплывающее окно("Я не могу найти папку плагинов BetterDiscord.\Вы уверены, что он вообще установлен?", 0, "Не могу установить сам", 0x10);
+ } иначе, если (оболочка.Всплывающее окно("Должен ли я скопировать себя в папку плагинов BetterDiscord для вас?", 0, "Вам нужна помощь?", 0x34) === 6) {
+ fs.CopyFile(путь к себе, fs.BuildPath(pathPlugins, fs.GetFileName(путь к себе)), true);
+ // Покажите пользователю, куда ставить плагины в будущем
+ shell.Exec("проводник" + плагины путей);
+ ракушка.Всплывающее окно("Я установлен!", 0, "Успешно установлен", 0x40);
+	}
+ WScript.Выход();
+@еще@*/
+модуль.экспорт = (() =>> {
+     конфигурация const = {
+        "информация": {
+            "название": "НитроПеркс",
+            "authors": [{
+                "name": "lemons",
+                "discord_id": "407348579376693260",
+                "github_username": "respecting"
+            },
+			{
+                "name": "Shimoro",
+                "discord_id": "427406422733619200",
+                "github_username": "Shimoro-Rune"
+            }],
+            "version": "1.3.7",
+            "description": "Set clientsided animated avatar and profile banner, share your screen at 60fps 1080P and use cross-server and animated emojis everywhere! You still won't be able to upload 100MB files though :<",
+            "github": "https://github.com/Shimoro-Rune/NitroPerks",
+            "github_raw": "https://raw.githubusercontent.com/Shimoro-Rune/NitroPerks/main/NitroPerks.plugin.js"
+        },
+		"changelog": [
+			{
+				"title": "Added profile banner",
+				"type": "added",
+				"items": [
+					"Added profile banner customization! Supported image formats: JPG, PNG, GIF. Recommended size is 600x240."
+				]
+			},
+			{
+				"title": "Fixed profile avatar",
+				"type": "fixed",
+				"items": [
+					"Fixed profile avatar didn't show up after Discord API update."
+				]
+			}
+		],
+        "main": "NitroPerks.plugin.js"
+    };
+
+    return !global.ZeresPluginLibrary ? class {
+        constructor() {
+            this._config = config;
+        }
+        getName() {
+            возвращение config.info.name;
+        }
+        getAuthor() {
+            верните файл config.info.authors.map(a =>> a.name).присоединяйтесь(", ");
+        }
+        getDescription() {
+            верните config.info.описание;
+        }
+        GetVersion() {
+            верните config.info.версию;
+        }
+		getChangelog() {
+			возврат конфигурации.список изменений;
+		}
+        нагрузка() {
+            BdApi.showConfirmationModal("Отсутствует библиотека", " Плагин библиотеки, необходимый для ${config.info.name} отсутствует. Пожалуйста, нажмите Загрузить сейчас, чтобы установить его.`, {
+                Текстподтверждения: "Скачать сейчас",
+                Текстотмены: "Отменить",
+                Подтвердите: () =>> {
+                    require("request").get("https://rauenzi.github.io/BDPluginLibrary/release/0PluginLibrary.plugin.js", async (error, response, body) => {
+                        если (ошибка) возвращается require("electron").shell.openExternal("https://betterdiscord.net/ghdl?url=https://raw.githubusercontent.com/rauenzi/BDPluginLibrary/master/release/0PluginLibrary.plugin.js");
+                        жду новых Promise(r =>> require("fs").writeFile(require("path").join(BdApi.Plugins.folder, "0PluginLibrary.plugin.js"), body, r));
+                    });
+                }
+            });
+        }
+        начало() {}
+        стоп() {}
+    } : (([Плагин, Api]) =>> {
+        const плагин = (Плагин, Api) =>> {
+            const {
+ Патчер,
+                DiscordModules,
+                DiscordAPI,
+                Settings,
+                Toasts,
+                PluginUtilities
+            } = Api;
+            return class NitroPerks extends Plugin {
+                defaultSettings = {
+                    "emojiSize": "40",
+                    "screenSharing": false,
+                    "emojiBypass": true,
+                    "clientsidePfp": false,
+                    "pfpUrl": "",
+                };
+                settings = PluginUtilities.loadSettings(this.getName(), this.defaultSettings);
+                originalNitroStatus = 0;
+                clientsidePfp;
+                screenShareFix;
+                getSettingsPanel() {
+                    return Settings.SettingPanel.build(_ => this.saveAndUpdate(), ...[
+                        new Settings.SettingGroup("Features").append(...[
+                            new Settings.Switch("High Quality Screensharing", "Enable or disable 1080p/source @ 60fps screensharing. This adapts to your current nitro status.", this.settings.screenSharing, value => this.settings.screenSharing = value)
+                        ]),
+                        new Settings.SettingGroup("Emojis").append(
+                            new Settings.Switch("Nitro Emojis Bypass", "Enable or disable using the Nitro Emoji bypass.", this.settings.emojiBypass, value => this.settings.emojiBypass = value),
+                            new Settings.Slider("Size", "The size of the emoji in pixels. 40 is recommended.", 16, 64, this.settings.emojiSize, size=>this.settings.emojiSize = size, {markers:[16,20,32,40,64], stickToMarkers:true})
+                        ),
+						new Settings.SettingGroup("Profile Avatar").append(...[
+							new Settings.Switch("Clientsided Profile Avatar", "Enable or disable clientsided profile avatar.", this.settings.clientsidePfp, value => this.settings.clientsidePfp = value),
+							new Settings.Textbox("URL", "The direct URL to the profile avatar you want (PNG, JPG or GIF; square image is recommended).", this.settings.pfpUrl,
+								image => {
+									try {
+										new URL(image)
+									} catch {
+										return Toasts.error('This is an invalid URL!')
+									}
+									this.settings.pfpUrl = image
+								}
+							)
+						]),
+						new Settings.SettingGroup("Profile Banner").append(...[
+                                new Settings.Switch("Clientsided Profile Banner", "Enable or disable clientsided profile banner.", this.settings.clientsideBanner, value => this.settings.clientsideBanner = value),
+                                new Settings.Textbox("URL", "The direct URL to the profile banner you want (PNG, JPG or GIF; 600x240 size is recommended).", this.settings.bannerUrl,
+                                    image => {
+                                        try {
+                                            new URL(image)
+                                        } catch {
+                                            return Toasts.error('This is an invalid URL!')
+                                        }
+                                        this.settings.bannerUrl = image
+                                    }
+                                )
+                            ])
+                    ])
+                }
+
+                saveAndUpdate() {
+                    PluginUtilities.saveSettings(this.getName(), this.settings)
+                    if (!this.settings.screenSharing) {
+                        switch (this.originalNitroStatus) {
+                            case 1:
+                                BdApi.injectCSS("screenShare", `#app-mount > div.layerContainer-yqaFcK > div.layer-2KE1M9 > div > div > form > div:nth-child(2) > div > div > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent-BM7Qeh > div:nth-child(1) > div > button:nth-child(4) {
+                                    display: none;
+                                  }`)
+                                this.screenShareFix = setInterval(()=>{
+                                    документ.querySelector("#App-в Маунт - > див.layerContainer-yqaFcK > див.слой-2KE1M9 > элемента div > div > в виде > див:п-й ребенок(2) > div > в тег div > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent-BM7Qeh > див:п-й ребенок(1) > div > и кнопку:п-й ребенок(3)").нажмите кнопку()
+                                    clearInterval(это.исправление экрана)
+                                }, 100)
+                                перерыв;
+                            по умолчанию: //если у пользователя нет нитро?
+                                BdApi.injectCSS("screenshare программа", `#Приложение-Маунт - > див.layerContainer-yqaFcK > див.слой-2KE1M9 > элемента div > div > в виде > див:п-й ребенок(2) > div > в тег div > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent-BM7Qeh > див:п-й ребенок(кнопка 1) > div > и:п-й ребенок(4) {
+ дисплей: нет;
+                                  }
+ #крепление приложения > div.layerContainer-yqaFcK >> div.layer-2KE1M9 >>> div >>>> div >>>>> форма >>>>>> div:n-й ребенок(2) >>>>>>> div > > > > > > > > div > > > > > > > > > > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent- BM7Qeh >>>>>>>>>> div:n-й ребенок(1) >>>>>>>>>>> div >>>>>>>>>>>> кнопка:n-й ребенок(3) {
+ дисплей: нет;
+                                  }
+ #крепление приложения > div.layerContainer-yqaFcK >> div.layer-2KE1M9 >>> div >>>> div >>>>> форма >>>>>> div:n-й ребенок(2) >>>>>>> div > > > > > > > > div > > > > > > > > > > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent- BM7Qeh >>>>>>>>>> div:n-й ребенок(2) >>>>>>>>>>> div >>>>>>>>>>>> кнопка:n-й ребенок(3) {
+ дисплей: нет;
+                                  }`)
+                                this.screenShareFix = setInterval(()=>{
+                                    документ.querySelector("#App-в Маунт - > див.layerContainer-yqaFcK > див.слой-2KE1M9 > элемента div > div > в виде > див:п-й ребенок(2) > div > в тег div > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent-BM7Qeh > див:п-й ребенок(1) > div > и кнопку:п-й ребенок(2)").нажмите кнопку()
+                                    документ.querySelector("#App-в Маунт - > див.layerContainer-yqaFcK > див.слой-2KE1M9 > элемента div > div > в виде > див:п-й ребенок(2) > div > в тег div > div.flex-1xMQg5.flex-1O1GKY.horizontal-1ae9ci.horizontal-2EEEnY.flex-1O1GKY.directionRow-3v3tfG.justifyStart-2NDFzi.alignStretch-DpGPf3.noWrap-3jynv6.modalContent-BM7Qeh > див:п-й ребенок(2) > div > и кнопку:п-й ребенок(2)").нажмите кнопку()
+                                    clearInterval(это.исправление экрана)
+                                }, 100)
+                            перерыв;
+                        }
+                    }
+
+                    если (это.настройки.скриншот) BdApi.clearCSS("Скриншот")
+
+                    если (this.настройки.emojiBypass) {
+                        //исправьте эмоции с помощью плохого метода
+                        Патчер.до(DiscordModules.MessageActions, "Отправить сообщение", (_, [, msg]) =>> {
+                            msg.действительнонешорткутемоджи.forEach(эмодзи =>> {
+                                если (emoji.url.StartsWith("/активы/")) вернет;
+                                глутамат натрия.содержание = МСГ.содержание.заменить(`<${эмодзи.анимированные ? "а" : ""}${эмодзи.allNamesString.заменить(/~\г/г, "")}${эмодзи.идентификатор}>`, смайлики.адрес URL + `&размер=${этот.настройки.emojiSize} `)
+                            })
+                        });
+                        //for editing message also
+                        Patcher.before(DiscordModules.MessageActions, "editMessage", (_,obj) => {
+                            let msg = obj[2].content
+                            if (msg.search(/\d{18}/g) == -1) return;
+                            msg.match(/<a:.+?:\d{18}>|<:.+?:\d{18}>/g).forEach(idfkAnymore=>{
+                                obj[2].content = obj[2].content.replace(idfkAnymore, `https://cdn.discordapp.com/emojis/${idfkAnymore.match(/\d{18}/g)[0]}?size=${this.settings.emojiSize}`)
+                            })
+                        });
+                    }
+
+                    if(!this.settings.emojiBypass) Patcher.unpatchAll(DiscordModules.MessageActions)
+
+                    if (this.settings.clientsidePfp && this.settings.pfpUrl) {
+                        this.clientsidePfp = setInterval(()=>{
+                            document.querySelectorAll(`[src="https://cdn.discordapp.com/avatars/${DiscordAPI.currentUser.discordObject.id}/${DiscordAPI.currentUser.discordObject.avatar}.webp?size=128"]`).forEach(avatar=>{
+                                avatar.src = this.settings.pfpUrl
+                            })
+                            document.querySelectorAll(`[src="https://cdn.discordapp.com/avatars/${DiscordAPI.currentUser.discordObject.id}/${DiscordAPI.currentUser.discordObject.avatar}.png?size=128"]`).forEach(avatar=>{
+                                avatar.src = this.settings.pfpUrl
+                            })
+                            document.querySelectorAll(`.avatarContainer-28iYmV.avatar-3tNQiO.avatarSmall-1PJoGO`).forEach(avatar=>{
+                                if (!avatar.style.backgroundImage.includes("https://cdn.discordapp.com/avatars/" + DiscordAPI.currentUser.discordObject.id + "/" + DiscordAPI.currentUser.discordObject.avatar + ".png?size=128")) return;
+                                avatar.style = `background-image: url("${this.settings.pfpUrl}");`
+                            })
+                        }, 100)
+                    }
+                    if (!this.settings.clientsidePfp) this.removeClientsidePfp()
+
+					if (this.settings.clientsideBanner && this.settings.bannerUrl) {
+                        this.clientsideBanner = setInterval(()=>{
+                            document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] div [class*="popoutBanner-"]`).forEach(banner=>{
+                                banner.style = `background-image: url("${this.settings.bannerUrl}") !important; background-repeat: no-repeat; background-position: 50%; background-size: cover; width: 300px; height: 120px;`
+                            })
+							document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] div [class*="profileBanner-"]`).forEach(banner=>{
+                                banner.style = `background-image: url("${this.settings.bannerUrl}") !important; background-repeat: no-repeat; background-position: 50%; background-size: cover; width: 600px; height: 240px;`
+                            })
+							document.querySelectorAll(`[class*="settingsBanner-"]`).forEach(banner=>{
+                                banner.style = `background-image: url("${this.settings.bannerUrl}") !important; background-repeat: no-repeat; background-position: 50%; background-size: cover;`
+                            })
+							document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] .avatarWrapperNormal-26WQIb`).forEach(avatar=>{
+                                avatar.style = `top: 76px;`
+                            })
+                        }, 100)
+                    }
+                    if (!this.settings.clientsideBanner) this.removeClientsideBanner()
+                }
+                removeClientsidePfp() {
+                    clearInterval(this.clientsidePfp)
+                    document.querySelectorAll(`[src="${this.settings.pfpUrl}"]`).forEach(avatar=>{
+                        avatar.src = "https://cdn.discordapp.com/avatars/" + DiscordAPI.currentUser.discordObject.id + "/" + DiscordAPI.currentUser.discordObject.avatar + ".webp?size=128"
+                    })
+                    document.querySelectorAll(`.avatarContainer-28iYmV.avatar-3tNQiO.avatarSmall-1PJoGO`).forEach(avatar=>{
+                        if (!avatar.style.backgroundImage.includes(this.settings.pfpUrl)) return;
+                        avatar.style = `background-image: url("https://cdn.discordapp.com/avatars/${DiscordAPI.currentUser.discordObject.id}/${DiscordAPI.currentUser.discordObject.avatar}.png?size=128");`
+                    })
+                }
+				removeClientsideBanner() {
+                    clearInterval(this.clientsideBanner)
+                    document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] div [class*="popoutBanner-"]`).forEach(banner=>{
+                        banner.style = `background-image: none !important; background-repeat: none; background-position: none; background-size: none; width: none; height: none;`
+                    })
+					document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] div [class*="profileBanner-"]`).forEach(banner=>{
+                        banner.style = `background-image: none !important; background-repeat: none; background-position: none; background-size: none; width: none; height: none;`
+                    })
+					document.querySelectorAll(`[class*="settingsBanner-"]`).forEach(banner=>{
+                        banner.style = `background-image: none !important; background-repeat: none; background-position: none; background-size: none;`
+                    })
+					document.querySelectorAll(`[data-user-id="${DiscordAPI.currentUser.discordObject.id}"] .avatarWrapperNormal-26WQIb`).forEach(avatar=>{
+                        avatar.style = `top: none;`
+                    })
+                }
+                onStart() {
+                    this.originalNitroStatus = DiscordAPI.currentUser.discordObject.premiumType;
+                    this.saveAndUpdate()
+                    DiscordAPI.currentUser.discordObject.premiumType = 2
+                }
+
+                onStop() {
+                    DiscordAPI.currentUser.discordObject.premiumType = this.originalNitroStatus;
+                    this.removeClientsidePfp()
+					this.removeClientsideBanner()
+                    Patcher.unpatchAll();
+                }
+            };
+        };
+        return plugin(Plugin, Api);
+    })(global.ZeresPluginLibrary.buildPlugin(config));
+})();
+/*@end@*/ 
